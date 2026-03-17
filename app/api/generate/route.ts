@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     const { task, category } = await req.json();
 
     // On utilise le modèle rapide et puissant de Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite-preview" });
 
     // Le "System Prompt" qui donne les instructions à l'IA
     const systemPrompt = `Tu es un Expert Développeur Senior. Transforme cette idée brute en un prompt parfait et ultra-structuré pour un développeur.
