@@ -3,7 +3,7 @@
 Un outil de Prompt Engineering premium pour les développeurs. Transforme des idées brutes en prompts IA ultra-structurés et performants (Role, Context, Task, Constraints). Construit avec Next.js (App Router), Tailwind CSS et Framer Motion.
 
 ## 🚀 Live Demo
-[Lien Vercel à venir]
+https://vibe-prompt-two.vercel.app/
 
 ## 🛠️ Stack Technique
 - **Framework:** Next.js (App Router)
