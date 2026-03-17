@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wand2, Copy, Check, TerminalSquare, Loader2, history } from "lucide-react";
+import { Wand2, Copy, Check, TerminalSquare, Loader2, } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 const CATEGORIES = ["Refactoring", "Debugging", "New Feature", "Architecture"];
