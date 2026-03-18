@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wand2, Copy, Check, TerminalSquare, Loader2, } from "lucide-react";
+import { Wand2, Copy, Check, TerminalSquare, Loader2, Trash2, LogOut } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 const CATEGORIES = ["Refactoring", "Debugging", "New Feature", "Architecture"];
 
@@ -13,17 +15,39 @@ export default function VibePrompt() {
   const [prompt, setPrompt] = useState("");
   const [isCopied, setIsCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [recents, setRecents] = useState<string[]>([]);
+  const [recents, setRecents] = useState<any[]>([]); // Changé pour stocker des objets de la DB
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
 
+  // 1. Vérifier la session et charger les prompts au démarrage
   useEffect(() => {
-    const saved = localStorage.getItem("vibe_recents");
-    if (saved) setRecents(JSON.parse(saved));
-  }, []);
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        fetchPrompts(user.id);
+      } else {
+        router.push("/auth"); // Rediriger si non connecté
+      }
+    };
+    checkUser();
+  }, [router]);
+
+  // 2. Récupérer les prompts depuis Supabase
+  const fetchPrompts = async (userId: string) => {
+    const { data, error } = await supabase
+      .from("prompts")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) setRecents(data);
+  };
 
   const generateVibe = async () => {
-    if (!task) return;
+    if (!task || !user) return;
     setIsLoading(true);
-    setPrompt(""); 
+    setPrompt("");
 
     try {
       const res = await fetch("/api/generate", {
@@ -36,17 +60,36 @@ export default function VibePrompt() {
 
       if (data.prompt) {
         setPrompt(data.prompt);
-        const newRecents = [data.prompt, ...recents.filter(r => r !== data.prompt)].slice(0, 5);
-        setRecents(newRecents);
-        localStorage.setItem("vibe_recents", JSON.stringify(newRecents));
-      } else {
-        setPrompt("Erreur lors de la génération du prompt.");
+        // SAUVEGARDE DANS SUPABASE
+        const { error } = await supabase.from("prompts").insert([
+          { 
+            user_id: user.id, 
+            task, 
+            category, 
+            generated_prompt: data.prompt 
+          }
+        ]);
+        
+        if (!error) fetchPrompts(user.id); // Rafraîchir l'historique
       }
     } catch (error) {
-      setPrompt("Impossible de se connecter à l'IA.");
+      setPrompt("Erreur réseau...");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 3. Supprimer un prompt
+  const deletePrompt = async (id: string) => {
+    const { error } = await supabase.from("prompts").delete().eq("id", id);
+    if (!error) {
+      setRecents(recents.filter(r => r.id !== id));
+    }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    router.push("/auth");
   };
 
   const copyToClipboard = async (text: string) => {
@@ -56,77 +99,65 @@ export default function VibePrompt() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-slate-200 font-sans selection:bg-purple-500/30 p-6 flex flex-col items-center">
+    <div className="min-h-screen bg-[#0a0a0a] text-slate-200 p-6 flex flex-col items-center">
       
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10 mt-10">
-        <h1 className="text-5xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 mb-2 flex items-center justify-center gap-3">
-          <TerminalSquare className="w-10 h-10 text-purple-500" /> VibePrompt
-        </h1>
-        <p className="text-slate-400">Le générateur de prompts ultra-optimisés pour les devs.</p>
-      </motion.div>
+      {/* Navbar / User Info */}
+      <div className="w-full max-w-2xl flex justify-between items-center mb-10">
+        <div className="flex items-center gap-2">
+          <TerminalSquare className="w-6 h-6 text-purple-500" />
+          <span className="font-bold tracking-tight">VibePrompt <span className="text-purple-500">Pro</span></span>
+        </div>
+        {user && (
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-slate-500">{user.email}</span>
+            <button onClick={logout} className="p-2 hover:bg-white/5 rounded-full text-slate-500 hover:text-red-400 transition-all">
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Main Card */}
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-2xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl shadow-purple-900/10">
-        
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-2xl bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl">
         <div className="space-y-4 mb-6">
           <textarea
             value={task}
             onChange={(e) => setTask(e.target.value)}
-            placeholder="Décrivez votre tâche de code (ex: Créer un hook useDebounce en TypeScript)..."
-            className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all resize-none h-32"
+            placeholder="Décrivez votre tâche..."
+            className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-slate-100 resize-none h-32 focus:outline-none focus:border-purple-500/50"
           />
-          
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full sm:w-auto bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-slate-300 focus:outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
+              className="w-full sm:w-auto bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-slate-300"
             >
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat} className="bg-[#0a0a0a]">{cat}</option>
               ))}
             </select>
-
             <button
               onClick={generateVibe}
               disabled={isLoading || !task}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-medium px-6 py-2.5 rounded-lg transition-all active:scale-95 shadow-[0_0_20px_rgba(168,85,247,0.4)] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-2.5 rounded-lg font-medium hover:opacity-90 transition-all"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-              {isLoading ? "Génération..." : "Generate Vibe Prompt"}
+              Générer
             </button>
           </div>
         </div>
 
-        {/* Display Prompt with Markdown */}
         <AnimatePresence>
           {prompt && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              className="relative bg-black/60 border border-purple-500/30 rounded-xl p-6 mt-6 group"
-            >
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative bg-black/60 border border-purple-500/30 rounded-xl p-6 mt-6">
               <div className="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300">
-                <ReactMarkdown
-                  components={{
-                    strong: ({ ...props }) => <span className="font-bold text-purple-400" {...props} />,
-                    ul: ({ ...props }) => <ul className="my-4 ml-6 list-disc space-y-2" {...props} />,
-                    li: ({ ...props }) => <li className="text-slate-300" {...props} />,
-                    h3: ({ ...props }) => <h3 className="mb-2 mt-6 text-lg font-bold text-white border-b border-white/10 pb-1" {...props} />,
-                    p: ({ ...props }) => <p className="mb-4" {...props} />,
-                    code: ({ ...props }) => <code className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-blue-400 border border-white/5" {...props} />
-                  }}
-                >
+                <ReactMarkdown components={{
+                  strong: ({ ...props }) => <span className="font-bold text-purple-400" {...props} />,
+                  code: ({ ...props }) => <code className="rounded bg-slate-800 px-1.5 py-0.5 text-blue-400" {...props} />
+                }}>
                   {prompt}
                 </ReactMarkdown>
               </div>
-
-              <button
-                onClick={() => copyToClipboard(prompt)}
-                className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-md backdrop-blur-sm transition-all text-slate-300 hover:text-white border border-white/10 shadow-lg"
-                title="Copier le prompt"
-              >
+              <button onClick={() => copyToClipboard(prompt)} className="absolute top-4 right-4 p-2 bg-white/10 rounded-md">
                 {isCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
             </motion.div>
@@ -134,34 +165,20 @@ export default function VibePrompt() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Recent History */}
+      {/* Historique Privé */}
       {recents.length > 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="w-full max-w-2xl mt-12 pb-10">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-1 h-1 bg-purple-500 rounded-full animate-pulse"></span>
-              Recent Vibes
-            </h3>
-            <button 
-              onClick={() => {setRecents([]); localStorage.removeItem("vibe_recents");}}
-              className="text-[10px] text-slate-600 hover:text-red-400 transition-colors uppercase tracking-widest"
-            >
-              Clear History
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
-            {recents.slice(0, 3).map((r, i) => (
-              <div 
-                key={i} 
-                className="flex items-center justify-between p-3 bg-white/5 border border-white/5 rounded-lg hover:border-purple-500/20 hover:bg-white/10 transition-all cursor-pointer group" 
-                onClick={() => copyToClipboard(r)}
-              >
-                <p className="text-xs text-slate-400 truncate max-w-[85%] font-mono">
-                  {r.replace(/[#*`]/g, '').slice(0, 100)}...
-                </p>
-                <div className="flex items-center gap-2">
-                   <span className="text-[10px] text-slate-600 group-hover:opacity-0 transition-opacity uppercase font-bold">Copy</span>
-                   <Copy className="w-3 h-3 text-slate-600 group-hover:text-purple-400 transition-colors" />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-2xl mt-12 pb-10">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Ton Historique Privé</h3>
+          <div className="flex flex-col gap-3">
+            {recents.map((r) => (
+              <div key={r.id} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-xl group hover:border-purple-500/30 transition-all">
+                <div className="cursor-pointer flex-1" onClick={() => {setPrompt(r.generated_prompt); setTask(r.task);}}>
+                  <p className="text-xs text-purple-400 font-bold mb-1">{r.category}</p>
+                  <p className="text-xs text-slate-400 truncate max-w-md font-mono">{r.task}</p>
+                </div>
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => copyToClipboard(r.generated_prompt)} className="p-2 hover:text-purple-400 text-slate-600"><Copy className="w-4 h-4" /></button>
+                  <button onClick={() => deletePrompt(r.id)} className="p-2 hover:text-red-400 text-slate-600"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             ))}
