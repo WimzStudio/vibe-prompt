@@ -25,7 +25,7 @@ Un outil de Prompt Engineering "SaaS" premium conçu spécifiquement pour les d�
 
 1. Cloner le dépôt :
 ```bash
-git clone [https://github.com/DegenWimz/vibe-prompt.git](https://github.com/DegenWimz/vibe-prompt.git)
+git clone [https://github.com/WimzStudio/vibe-prompt.git](https://github.com/WimzStudio/vibe-prompt.git)
 cd vibe-prompt
 ```
 
