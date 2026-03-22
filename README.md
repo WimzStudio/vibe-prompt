@@ -49,4 +49,3 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=votre_cle_anon_supabase_ici
 ```bash
 npm run dev
 ```
-test
